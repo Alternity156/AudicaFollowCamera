@@ -1,0 +1,6 @@
+
+*.cache
+*.CopyComplete
+CameraFollow/obj/Release/FollowCamera.csproj.FileListAbsolute.txt
+*.dll
+*.pdb
