@@ -12,7 +12,7 @@ namespace FollowCamera
         public const string Name = "FollowCamera"; // Name of the Mod.  (MUST BE SET)
         public const string Author = "Alternity"; // Author of the Mod.  (Set as null if none)
         public const string Company = null; // Company that made the Mod.  (Set as null if none)
-        public const string Version = "1.0.0"; // Version of the Mod.  (MUST BE SET)
+        public const string Version = "1.1.0"; // Version of the Mod.  (MUST BE SET)
         public const string DownloadLink = null; // Download Link for the Mod.  (Set as null if none)
     }
 
@@ -26,10 +26,15 @@ namespace FollowCamera
         public static MenuState.State menuState;
         public static MenuState.State oldMenuState;
 
+        //Tracking FOV setting while in spectator cam menu
+        public static PlayerPreferences.FloatPref fov = null;
+        public static PlayerPreferences.FloatPref oldFov = null;
+
         public static bool camOK = false;
 
-        public static SpectatorCam spectatorCam;
+        public static SpectatorCam spectatorCam = null;
 
+        public static OptionsMenuButton toggleButton = null;
         public static OptionsMenuSlider positionSmoothingSlider = null;
         public static OptionsMenuSlider rotationSmoothingSlider = null;
         public static OptionsMenuSlider camHeightSlider = null;
@@ -97,13 +102,17 @@ namespace FollowCamera
                 float camMode = PlayerPreferences.I.SpectatorCamMode.Get();
                 if (camMode == 1)
                 {
-                    //If camOK is already true at this point we don't need to do anything
-                    if (!camOK)
+                    if (config.activated)
                     {
-                        //If it's not, get reference for SpectatorCam class and set camOK to true
-                        spectatorCam = UnityEngine.Object.FindObjectOfType<SpectatorCam>();
-                        camOK = true;
+                        //If camOK is already true at this point we don't need to do anything
+                        if (!camOK)
+                        {
+                            //If it's not, get reference for SpectatorCam class and set camOK to true
+                            spectatorCam = UnityEngine.Object.FindObjectOfType<SpectatorCam>();
+                            camOK = true;
+                        }
                     }
+                    else { camOK = false; }
                 }
                 else { camOK = false; }
             }
@@ -114,7 +123,7 @@ namespace FollowCamera
         {
             LoadConfig();
 
-            Instance instance = Manager.CreateInstance("CameraScript");
+            Instance instance = Manager.CreateInstance("FollowCamera");
 
             SpectatorCam_Update = instance.Patch(SDK.GetClass("SpectatorCam").GetMethod("Update"), typeof(FollowCamera).GetMethod("SpectatorCamUpdate"));
             OptionsMenu_ShowPage = instance.Patch(SDK.GetClass("OptionsMenu").GetMethod("ShowPage"), typeof(FollowCamera).GetMethod("ShowPage"));
@@ -131,10 +140,39 @@ namespace FollowCamera
             {
                 OptionsMenu optionsMenu = new OptionsMenu(@this);
 
+                /*
+                string toggleText = "OFF";
+
+                if (config.activated)
+                {
+                    toggleText = "ON";
+                }
+
+                toggleButton = OptionsMenu.I.AddButton
+                    (0,
+                    toggleText, 
+                    new Action(() => { 
+                        if (config.activated)
+                        {
+                            config.activated = false;
+                            toggleButton.label.text = "OFF";
+                            SaveConfig();
+                        }
+                        else
+                        {
+                            config.activated = true;
+                            toggleButton.label.text = "ON";
+                            SaveConfig();
+                        }
+                    }), 
+                    null, 
+                    "Turns the follow camera on or off");
+                */
+
                 positionSmoothingSlider = optionsMenu.AddSlider
                     (
                     0, 
-                    "Position Smoothing", 
+                    "Position Speed", 
                     "P", 
                     new Action<float>((float n) => {
                         config.positionSmoothing = Mathf.Round((config.positionSmoothing + (n * 0.001f)) * 1000.0f) / 1000.0f; 
@@ -149,7 +187,7 @@ namespace FollowCamera
                 rotationSmoothingSlider = optionsMenu.AddSlider
                     (
                     0,
-                    "Rotation Smoothing",
+                    "Rotation Speed",
                     "P",
                     new Action<float>((float n) => {
                         config.rotationSmoothing = Mathf.Round((config.rotationSmoothing + (n * 0.001f)) * 1000.0f) / 1000.0f;
@@ -209,7 +247,7 @@ namespace FollowCamera
                 camRotationSlider = optionsMenu.AddSlider
                     (
                     0,
-                    "Rotation",
+                    "Tilt",
                     "P",
                     new Action<float>((float n) => {
                         config.camRotation = Mathf.Round((config.camRotation + (n * 0.1f)) * 10.0f) / 10.0f;
@@ -223,19 +261,20 @@ namespace FollowCamera
 
                 optionsMenu.scrollable.AddRow(optionsMenu.AddHeader(0, "Follow Camera <size=5>Must be set to 3rd person static</size>"));
 
-                //UnhollowerBaseLib.IL2CPP.<GameObject> row1 = new UnhollowerBaseLib.Il2CppArrayBase<GameObject>();
-
-                //System.Collections.Generic.List<GameObject> row1 = new System.Collections.Generic.List<GameObject>();
-
+                //optionsMenu.scrollable.AddRow(toggleButton.gameObject);
                 optionsMenu.scrollable.AddRow(positionSmoothingSlider.gameObject);
                 optionsMenu.scrollable.AddRow(rotationSmoothingSlider.gameObject);
                 optionsMenu.scrollable.AddRow(camOffsetSlider.gameObject);
                 optionsMenu.scrollable.AddRow(camHeightSlider.gameObject);
                 optionsMenu.scrollable.AddRow(camDistanceSlider.gameObject);
                 optionsMenu.scrollable.AddRow(camRotationSlider.gameObject);
+
+                if (config.activated)
+                {
+                    spectatorCam.previewCam.gameObject.SetActive(true);
+                    spectatorCam.previewCamDisplay.SetActive(true);
+                }
             }
-
-
         }
 
         public static unsafe void SpectatorCamUpdate(IntPtr @this)
@@ -278,9 +317,29 @@ namespace FollowCamera
                 if (menuState == MenuState.State.MainPage)
                 {
                     CheckCamera();
+                    if (config.activated)
+                    {
+                        spectatorCam.previewCam.gameObject.SetActive(false);
+                        spectatorCam.previewCamDisplay.SetActive(false);
+                    }
                 }
 
                 oldMenuState = menuState;
+            }
+
+            if (menuState == MenuState.State.SettingsPage)
+            {
+                CheckCamera();
+
+                fov = PlayerPreferences.I.SpectatorCamFOV;
+                if (fov != oldFov)
+                {
+                    if (oldFov != null)
+                    {
+                        spectatorCam.UpdateFOV();
+                    }
+                    oldFov = fov;
+                }
             }
         }
 

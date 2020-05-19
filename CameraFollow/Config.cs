@@ -2,6 +2,7 @@
 {
     public class Config
     {
+        public bool activated = true;
         public float positionSmoothing = 0.005f;
         public float rotationSmoothing = 0.005f;
         public float camHeight = 1.0f;

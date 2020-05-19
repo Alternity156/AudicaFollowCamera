@@ -1,4 +1,5 @@
-﻿using SimpleJSON;
+﻿using MelonLoader;
+using SimpleJSON;
 
 namespace FollowCamera
 {
@@ -8,6 +9,7 @@ namespace FollowCamera
         {
             var configJSON = new JSONObject();
 
+            configJSON["activated"] = config.activated;
             configJSON["positionSmoothing"] = config.positionSmoothing;
             configJSON["rotationSmoothing"] = config.rotationSmoothing;
             configJSON["camHeight"] = config.camHeight;
@@ -22,6 +24,16 @@ namespace FollowCamera
         public static void SetConfig(Config config, string data)
         {
             var configJSON = JSON.Parse(data);
+
+            //Old version support
+            try
+            {
+                config.activated = configJSON["activated"];
+            }
+            catch
+            {
+                MelonModLogger.Log("Save file from V 1.0.0 loaded");
+            }
 
             config.positionSmoothing = configJSON["positionSmoothing"];
             config.rotationSmoothing = configJSON["rotationSmoothing"];
